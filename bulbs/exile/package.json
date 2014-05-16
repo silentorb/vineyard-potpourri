@@ -1,0 +1,8 @@
+{
+  "name": "vineyard-exile",
+  "version": "0.1.0",
+  "description": "Ban users from your garden.",
+  "main": "exile.js",
+  "author": "Christopher W. Johnson",
+  "license": "MIT"
+}

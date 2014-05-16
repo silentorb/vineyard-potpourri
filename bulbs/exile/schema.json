@@ -1,0 +1,16 @@
+{
+  "trellises": {
+    "ban": {
+      "parent": "object",
+      "properties": {
+        "user": {
+          "type": "reference",
+          "trellis": "user"
+        },
+        "reason": {
+          "type": "int"
+        }
+      }
+    }
+  }
+}

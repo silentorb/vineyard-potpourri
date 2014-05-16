@@ -1,0 +1,18 @@
+{
+  "name": "vineyard-potpourri",
+  "version": "0.1.0",
+  "description": "A hard-to-spell collection of mini-bulbs for Vineyard",
+  "main": "none",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silentorb/vineyard-potpourri.git"
+  },
+  "author": "Christopher W. Johnson",
+  "license": "MIT",
+  "devDependencies": {
+    "grunt": "~0.4.x",
+    "grunt-ts": "~1.x.x",
+    "grunt-text-replace": "~0.3.11",
+    "grunt-contrib-watch": "~0.6.1"
+  }
+}
