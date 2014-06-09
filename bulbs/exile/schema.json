@@ -1,4 +1,9 @@
 {
+  "tables": {
+    "song_banned": {
+      "name": "song_banned"
+    }
+  },
   "trellises": {
     "user": {
       "properties": {
