@@ -23,7 +23,7 @@ var Exile = (function (_super) {
 
     Exile.prototype.on_banned = function (ban) {
         var lawn = this.vineyard.bulbs.lawn;
-        lawn.notify([ban.user], 'banned', ban).then(function () {
+        lawn.notify([ban.user], 'banned', { ban: ban.id }, 'song_banned').then(function () {
             console.log('ban', ban);
             var sockets = lawn.get_user_sockets(ban.user);
             for (var i in sockets) {

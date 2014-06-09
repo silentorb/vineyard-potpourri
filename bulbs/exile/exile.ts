@@ -13,7 +13,7 @@ class Exile extends Vineyard.Bulb {
 
   on_banned(ban) {
     var lawn = this.vineyard.bulbs.lawn
-    lawn.notify([ban.user], 'banned', ban)
+    lawn.notify([ban.user], 'banned', { ban: ban.id }, 'song_banned')
       .then(()=> {
         console.log('ban', ban)
         var sockets = lawn.get_user_sockets(ban.user)

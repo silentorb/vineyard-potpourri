@@ -1,5 +1,13 @@
 {
   "trellises": {
+    "user": {
+      "properties": {
+        "banned": {
+          "type": "list",
+          "trellis": "ban"
+        }
+      }
+    },
     "ban": {
       "parent": "object",
       "properties": {
@@ -9,6 +17,15 @@
         },
         "reason": {
           "type": "int"
+        }
+      }
+    },
+    "song_banned": {
+      "parent": "notification",
+      "properties": {
+        "ban": {
+          "type": "reference",
+          "trellis": "ban"
         }
       }
     }
