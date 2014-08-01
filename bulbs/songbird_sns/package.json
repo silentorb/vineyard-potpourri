@@ -1,0 +1,11 @@
+{
+  "name": "vineyard-songbird-sns",
+  "version": "0.1.0",
+  "description": "Allows Songbird to push notifications through Amazon Simple Push Notifications.",
+  "main": "songbird_sns.js",
+  "author": "Christopher W. Johnson",
+  "license": "MIT",
+  "dependencies": {
+    "sns-mobile": "0.0.3"
+  }
+}
