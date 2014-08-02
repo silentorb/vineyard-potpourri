@@ -72,16 +72,16 @@ class Songbird_SNS extends Vineyard.Bulb {
   register(user, platform_name:string, device_id:string):Promise {
     var def = when.defer()
     var platform = this.get_platform(platform_name)
-    platform.addUser(device_id, null, function (err, endpointArn) {
+    platform.addUser(device_id, null, (err, endpoint)=> {
       if (err)
         def.reject(err)
 
-      def.resolve()
+      var sql = "REPLACE INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)"
+      + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))"
+      return this.ground.db.query(sql, [user.id, device_id, endpoint, platform_name])
         .then(()=> {
-          var sql = "REPLACE INTO push_targets () VALUES ()"
-          return this.ground.db.query(sql)
+          def.resolve()
         })
-
     })
 
     return def.promise
@@ -100,7 +100,7 @@ class Songbird_SNS extends Vineyard.Bulb {
   private send_to_endpoint(platform_name:string, endpoint:string, message:string) {
     var platform = this.get_platform(platform_name)
     var def = when.defer()
-    platform.sendMessage(endpoint, message, function (err, message_id) {
+    platform.sendMessage(endpoint, message, (err, message_id)=> {
       if (err)
         def.reject(err)
 

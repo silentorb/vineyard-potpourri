@@ -65,16 +65,16 @@ var Songbird_SNS = (function (_super) {
     };
 
     Songbird_SNS.prototype.register = function (user, platform_name, device_id) {
+        var _this = this;
         var def = when.defer();
         var platform = this.get_platform(platform_name);
-        platform.addUser(device_id, null, function (err, endpointArn) {
-            var _this = this;
+        platform.addUser(device_id, null, function (err, endpoint) {
             if (err)
                 def.reject(err);
 
-            def.resolve().then(function () {
-                var sql = "REPLACE INTO push_targets () VALUES ()";
-                return _this.ground.db.query(sql);
+            var sql = "REPLACE INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)" + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))";
+            return _this.ground.db.query(sql, [user.id, device_id, endpoint, platform_name]).then(function () {
+                def.resolve();
             });
         });
 
