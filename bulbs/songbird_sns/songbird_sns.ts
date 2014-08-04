@@ -29,6 +29,12 @@ class Songbird_SNS extends Vineyard.Bulb {
     var lawn = this.vineyard.bulbs.lawn
     this.listen(lawn, 'user.login', (user, args)=> this.on_login(user, args))
 
+    var songbird = this.vineyard.bulbs.songbird
+    if (!songbird)
+      throw new Error("Songbird_SNS requires the Songbird bulb.")
+
+    songbird.add_fallback(this)
+
     var config:Config = this.config
 
     if (config.android_arn)
@@ -88,6 +94,7 @@ class Songbird_SNS extends Vineyard.Bulb {
   }
 
   send(user, message):Promise {
+    console.log('pushing message to user ' + user.id + '.', message)
     return this.ground.db.query('SELECT * FROM push_targets WHERE user = ?', [user.id])
       .then((rows)=> {
         if (rows.length == 0)
@@ -98,12 +105,14 @@ class Songbird_SNS extends Vineyard.Bulb {
   }
 
   private send_to_endpoint(platform_name:string, endpoint:string, message:string) {
+    console.log('send_to_endpoint', platform_name)
     var platform = this.get_platform(platform_name)
     var def = when.defer()
     platform.sendMessage(endpoint, message, (err, message_id)=> {
-      if (err)
+      if (err) {
         def.reject(err)
-
+      }
+      console.log('message pushed to endpoint ' + endpoint)
       def.resolve(message_id)
     })
 

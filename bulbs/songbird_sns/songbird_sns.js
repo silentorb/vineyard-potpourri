@@ -24,6 +24,12 @@ var Songbird_SNS = (function (_super) {
             return _this.on_login(user, args);
         });
 
+        var songbird = this.vineyard.bulbs.songbird;
+        if (!songbird)
+            throw new Error("Songbird_SNS requires the Songbird bulb.");
+
+        songbird.add_fallback(this);
+
         var config = this.config;
 
         if (config.android_arn)
@@ -83,6 +89,7 @@ var Songbird_SNS = (function (_super) {
 
     Songbird_SNS.prototype.send = function (user, message) {
         var _this = this;
+        console.log('pushing message to user ' + user.id + '.', message);
         return this.ground.db.query('SELECT * FROM push_targets WHERE user = ?', [user.id]).then(function (rows) {
             if (rows.length == 0)
                 return when.resolve([]);
@@ -94,12 +101,14 @@ var Songbird_SNS = (function (_super) {
     };
 
     Songbird_SNS.prototype.send_to_endpoint = function (platform_name, endpoint, message) {
+        console.log('send_to_endpoint', platform_name);
         var platform = this.get_platform(platform_name);
         var def = when.defer();
         platform.sendMessage(endpoint, message, function (err, message_id) {
-            if (err)
+            if (err) {
                 def.reject(err);
-
+            }
+            console.log('message pushed to endpoint ' + endpoint);
             def.resolve(message_id);
         });
 
