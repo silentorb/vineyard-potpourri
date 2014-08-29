@@ -8,6 +8,16 @@ var Vineyard = require('vineyard');
 var SNS = require('sns-mobile');
 var when = require('when');
 
+var EMITTED_EVENTS = {
+    BROADCAST_START: 'broadcastStart',
+    BROADCAST_END: 'broadcastEnd',
+    SENT_MESSAGE: 'messageSent',
+    DELETED_USER: 'userDeleted',
+    FAILED_SEND: 'sendFailed',
+    ADDED_USER: 'userAdded',
+    ADD_USER_FAILED: 'addUserFailed'
+};
+
 var Songbird_SNS = (function (_super) {
     __extends(Songbird_SNS, _super);
     function Songbird_SNS() {
@@ -74,9 +84,14 @@ var Songbird_SNS = (function (_super) {
         var _this = this;
         var def = when.defer();
         var platform = this.get_platform(platform_name);
-        platform.addUser(device_id, null, function (err, endpoint) {
-            if (err)
+        var data = JSON.stringify({
+            userId: user.id
+        });
+        platform.addUser(device_id, data, function (err, endpoint) {
+            if (err) {
                 def.reject(err);
+                return when.resolve();
+            }
 
             var sql = "REPLACE INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)" + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))";
             return _this.ground.db.query(sql, [user.id, device_id, endpoint, platform_name]).then(function () {
@@ -104,15 +119,46 @@ var Songbird_SNS = (function (_super) {
         console.log('send_to_endpoint', platform_name);
         var platform = this.get_platform(platform_name);
         var def = when.defer();
-        platform.sendMessage(endpoint, message, function (err, message_id) {
+        var data = {
+            aps: {
+                alert: "You have a " + message.type,
+                badge: 5,
+                payload: message
+            }
+        };
+
+        var json = {};
+
+        json[this.config.ios_payload_key] = JSON.stringify(data);
+
+        console.log("sending sns:", json);
+        this.publish(platform, endpoint, json, function (err, message_id) {
             if (err) {
+                console.log("sns error: ", err);
                 def.reject(err);
+                return;
             }
             console.log('message pushed to endpoint ' + endpoint);
             def.resolve(message_id);
         });
 
         return def.promise;
+    };
+
+    Songbird_SNS.prototype.publish = function (platform, endpointArn, message, callback) {
+        platform.sns.publish({
+            Message: JSON.stringify(message),
+            TargetArn: endpointArn,
+            MessageStructure: 'json'
+        }, function (err, res) {
+            if (err) {
+                platform.emit(EMITTED_EVENTS.FAILED_SEND, endpointArn, err);
+            } else {
+                platform.emit(EMITTED_EVENTS.SENT_MESSAGE, endpointArn, res.MessageId);
+            }
+
+            return callback(err, ((res && res.MessageId) ? res.MessageId : null));
+        });
     };
     return Songbird_SNS;
 })(Vineyard.Bulb);

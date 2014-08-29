@@ -19,6 +19,16 @@ interface Config {
   api_version:string
 }
 
+var EMITTED_EVENTS = {
+  BROADCAST_START: 'broadcastStart',
+  BROADCAST_END: 'broadcastEnd',
+  SENT_MESSAGE: 'messageSent',
+  DELETED_USER: 'userDeleted',
+  FAILED_SEND: 'sendFailed',
+  ADDED_USER: 'userAdded',
+  ADD_USER_FAILED: 'addUserFailed'
+};
+
 class Songbird_SNS extends Vineyard.Bulb {
   platforms = {}
 
@@ -78,9 +88,14 @@ class Songbird_SNS extends Vineyard.Bulb {
   register(user, platform_name:string, device_id:string):Promise {
     var def = when.defer()
     var platform = this.get_platform(platform_name)
-    platform.addUser(device_id, null, (err, endpoint)=> {
-      if (err)
+    var data = JSON.stringify({
+      userId: user.id
+    })
+    platform.addUser(device_id, data, (err, endpoint)=> {
+      if (err) {
         def.reject(err)
+        return when.resolve()
+      }
 
       var sql = "REPLACE INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)"
       + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))"
@@ -104,13 +119,28 @@ class Songbird_SNS extends Vineyard.Bulb {
       })
   }
 
-  private send_to_endpoint(platform_name:string, endpoint:string, message:string) {
+  private send_to_endpoint(platform_name:string, endpoint:string, message) {
     console.log('send_to_endpoint', platform_name)
     var platform = this.get_platform(platform_name)
     var def = when.defer()
-    platform.sendMessage(endpoint, message, (err, message_id)=> {
+    var data = {
+      aps: {
+        alert: "You have a " + message.type,
+        badge: 5,
+        payload: message
+      }
+    }
+
+    var json = {}
+//    console.log("sns aps:", data)
+    json[this.config.ios_payload_key] = JSON.stringify(data)
+
+    console.log("sending sns:", json)
+    this.publish(platform, endpoint, json, (err, message_id)=> {
       if (err) {
+        console.log("sns error: ", err)
         def.reject(err)
+        return
       }
       console.log('message pushed to endpoint ' + endpoint)
       def.resolve(message_id)
@@ -118,6 +148,23 @@ class Songbird_SNS extends Vineyard.Bulb {
 
     return def.promise
   }
+
+  private publish(platform, endpointArn, message, callback) {
+    platform.sns.publish({
+      Message: JSON.stringify(message),
+      TargetArn: endpointArn,
+      MessageStructure: 'json',
+    }, function(err, res) {
+      if (err) {
+        platform.emit(EMITTED_EVENTS.FAILED_SEND, endpointArn, err);
+      } else {
+        platform.emit(EMITTED_EVENTS.SENT_MESSAGE, endpointArn, res.MessageId);
+      }
+
+      return callback(err, ((res && res.MessageId) ? res.MessageId : null));
+    });
+  }
+
 }
 
 export = Songbird_SNS
