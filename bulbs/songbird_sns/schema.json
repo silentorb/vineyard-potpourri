@@ -1,7 +1,12 @@
 {
   "tables": {
     "push_target": {
-      "primary_keys": ["user", "device_id"]
+      "primary_keys": ["user", "device_id"],
+      "properties":{
+        "device_id": {
+          "unique": true
+        }
+      }
     }
   },
   "trellises": {

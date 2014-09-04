@@ -3,6 +3,7 @@
 import Vineyard = require('vineyard')
 var SNS = require('sns-mobile');
 import when = require('when')
+var pipeline = require('when/pipeline')
 
 interface Push_Platform {
   addUser
@@ -85,21 +86,36 @@ class Songbird_SNS extends Vineyard.Bulb {
     return when.resolve()
   }
 
-  register(user, platform_name:string, device_id:string):Promise {
+  private delete_endpoint(endpoint:string, platform):Promise {
     var def = when.defer()
-    var platform = this.get_platform(platform_name)
+    platform.deleteUser(endpoint, (error) => {
+      if (error) {
+        console.log(error)
+        def.reject(error)
+      }
+      else {
+        def.resolve()
+      }
+    })
+
+    return def.promise
+  }
+
+  private create_endpoint(user, platform, device_id:string):Promise {
+    var def = when.defer()
     var data = JSON.stringify({
       userId: user.id
     })
-    platform.addUser(device_id, data, (err, endpoint)=> {
-      if (err) {
-        def.reject(err)
-        return when.resolve()
+    platform.addUser(device_id, data, (error, endpoint)=> {
+      if (error) {
+        def.reject(error)
+        console.log(error)
+        return
       }
 
-      var sql = "REPLACE INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)"
-      + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))"
-      return this.ground.db.query(sql, [user.id, device_id, endpoint, platform_name])
+      var sql = "INSERT INTO `wevent_db`.`push_targets` (`user`, `device_id`, `endpoint`, `platform`, `timestamp`)"
+        + "\n VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(NOW()))"
+      return this.ground.db.query(sql, [user.id, device_id, endpoint, platform.platform])
         .then(()=> {
           def.resolve()
         })
@@ -108,42 +124,67 @@ class Songbird_SNS extends Vineyard.Bulb {
     return def.promise
   }
 
-  send(user, message):Promise {
+  register(user, platform_name:string, device_id:string):Promise {
+    if (user.username == 'anonymous' || user.name == 'anonymous')
+      return when.resolve()
+
+    var platform = this.get_platform(platform_name)
+
+    return this.ground.db.query_single("SELECT * FROM `push_targets` WHERE device_id = ?", [device_id])
+      .then((row) => {
+        if (row) {
+          return row.user == user.id
+            ? when.resolve()
+            : pipeline([
+            ()=> this.delete_endpoint(row.endpoint, platform),
+            ()=> this.ground.db.query("DELETE FROM `push_targets` WHERE device_id = ?", [device_id]),
+            ()=> this.create_endpoint(user, platform, device_id)
+          ])
+        }
+        else {
+          return this.create_endpoint(user, platform, device_id)
+        }
+      })
+  }
+
+  send(user, message, data, badge):Promise {
     console.log('pushing message to user ' + user.id + '.', message)
     return this.ground.db.query('SELECT * FROM push_targets WHERE user = ?', [user.id])
       .then((rows)=> {
         if (rows.length == 0)
           return when.resolve([])
 
-        return when.all(rows.map((row)=> this.send_to_endpoint(row.platform, row.endpoint, message)))
+        return when.all(rows.map((row)=> this.send_to_endpoint(row.platform, row.endpoint, message, data, badge)))
       })
   }
 
-  private send_to_endpoint(platform_name:string, endpoint:string, message) {
+  private send_to_endpoint(platform_name:string, endpoint:string, message, badge, data) {
     console.log('send_to_endpoint', platform_name)
     var platform = this.get_platform(platform_name)
     var def = when.defer()
-    var data = {
-      aps: {
-        alert: "You have a " + message.type,
-        badge: 5,
-        payload: message
-      }
+    var aps = {
+      alert: message,
+      badge: 5,
+      payload: data
     }
+    if (badge)
+      aps.badge = badge
 
     var json = {}
-//    console.log("sns aps:", data)
-    json[this.config.ios_payload_key] = JSON.stringify(data)
+    json[this.config.ios_payload_key] = JSON.stringify({
+      aps: aps
+    })
 
     console.log("sending sns:", json)
-    this.publish(platform, endpoint, json, (err, message_id)=> {
-      if (err) {
-        console.log("sns error: ", err)
-        def.reject(err)
-        return
+    this.publish(platform, endpoint, json, (error, message_id)=> {
+      if (error) {
+        console.log("sns error: ", error)
+        def.reject(error)
       }
-      console.log('message pushed to endpoint ' + endpoint)
-      def.resolve(message_id)
+      else {
+        console.log('message pushed to endpoint ' + endpoint)
+        def.resolve(message_id)
+      }
     })
 
     return def.promise
@@ -154,14 +195,14 @@ class Songbird_SNS extends Vineyard.Bulb {
       Message: JSON.stringify(message),
       TargetArn: endpointArn,
       MessageStructure: 'json',
-    }, function(err, res) {
-      if (err) {
-        platform.emit(EMITTED_EVENTS.FAILED_SEND, endpointArn, err);
+    }, function (error, res) {
+      if (error) {
+        platform.emit(EMITTED_EVENTS.FAILED_SEND, endpointArn, error);
       } else {
         platform.emit(EMITTED_EVENTS.SENT_MESSAGE, endpointArn, res.MessageId);
       }
 
-      return callback(err, ((res && res.MessageId) ? res.MessageId : null));
+      return callback(error, ((res && res.MessageId) ? res.MessageId : null));
     });
   }
 
