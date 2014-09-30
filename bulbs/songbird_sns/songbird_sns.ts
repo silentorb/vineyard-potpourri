@@ -1,5 +1,9 @@
 /// <reference path="../../../vineyard-lawn/lawn.d.ts"/>
 
+
+declare var require
+declare var __dirname
+
 import Vineyard = require('vineyard')
 var SNS = require('sns-mobile');
 import when = require('when')
@@ -158,22 +162,35 @@ class Songbird_SNS extends Vineyard.Bulb {
       })
   }
 
-  private send_to_endpoint(platform_name:string, endpoint:string, message, badge, data) {
+  private send_to_endpoint(platform_name:string, endpoint:string, message, data, badge) {
     console.log('send_to_endpoint', platform_name)
     var platform = this.get_platform(platform_name)
     var def = when.defer()
-    var aps = {
-      alert: message,
-      badge: 5,
-      payload: data
-    }
-    if (badge)
-      aps.badge = badge
+    var json
 
-    var json = {}
-    json[this.config.ios_payload_key] = JSON.stringify({
-      aps: aps
-    })
+    if (platform_name == 'ios') {
+      var aps = {
+        alert: message,
+        payload: data
+      }
+      if (badge)
+        aps['badge'] = badge
+
+      json = {}
+      json[this.config.ios_payload_key] = JSON.stringify({
+        aps: aps
+      })
+    }
+    else {
+      var gcm = {
+        data: {
+          message: message
+        }
+      }
+      json = {
+        "GCM": JSON.stringify(gcm)
+      }
+    }
 
     console.log("sending sns:", json)
     this.publish(platform, endpoint, json, (error, message_id)=> {
@@ -205,7 +222,6 @@ class Songbird_SNS extends Vineyard.Bulb {
       return callback(error, ((res && res.MessageId) ? res.MessageId : null));
     });
   }
-
 }
 
 export = Songbird_SNS

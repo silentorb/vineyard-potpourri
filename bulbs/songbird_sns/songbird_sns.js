@@ -4,6 +4,7 @@ var __extends = this.__extends || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
+
 var Vineyard = require('vineyard');
 var SNS = require('sns-mobile');
 var when = require('when');
@@ -156,22 +157,34 @@ var Songbird_SNS = (function (_super) {
         });
     };
 
-    Songbird_SNS.prototype.send_to_endpoint = function (platform_name, endpoint, message, badge, data) {
+    Songbird_SNS.prototype.send_to_endpoint = function (platform_name, endpoint, message, data, badge) {
         console.log('send_to_endpoint', platform_name);
         var platform = this.get_platform(platform_name);
         var def = when.defer();
-        var aps = {
-            alert: message,
-            badge: 5,
-            payload: data
-        };
-        if (badge)
-            aps.badge = badge;
+        var json;
 
-        var json = {};
-        json[this.config.ios_payload_key] = JSON.stringify({
-            aps: aps
-        });
+        if (platform_name == 'ios') {
+            var aps = {
+                alert: message,
+                payload: data
+            };
+            if (badge)
+                aps['badge'] = badge;
+
+            json = {};
+            json[this.config.ios_payload_key] = JSON.stringify({
+                aps: aps
+            });
+        } else {
+            var gcm = {
+                data: {
+                    message: message
+                }
+            };
+            json = {
+                "GCM": JSON.stringify(gcm)
+            };
+        }
 
         console.log("sending sns:", json);
         this.publish(platform, endpoint, json, function (error, message_id) {
