@@ -112,8 +112,8 @@ class Songbird_SNS extends Vineyard.Bulb {
     })
     platform.addUser(device_id, data, (error, endpoint)=> {
       if (error) {
-        def.reject(error)
         console.log(error)
+        def.reject(error)
         return
       }
 
@@ -128,7 +128,25 @@ class Songbird_SNS extends Vineyard.Bulb {
     return def.promise
   }
 
+  get_user(platform, endpoint) {
+    console.log('get_user')
+    var def = when.defer()
+    platform.getUser(endpoint, (error, response)=> {
+      console.log('get_user', error, response)
+      if (error) {
+        console.log(error)
+        def.reject(error)
+      }
+      else {
+        def.resolve(response)
+      }
+    })
+
+    return def.promise
+  }
+
   register(user, platform_name:string, device_id:string):Promise {
+    //console.log('register', platform_name, device_id)
     if (user.username == 'anonymous' || user.name == 'anonymous')
       return when.resolve()
 
@@ -137,13 +155,26 @@ class Songbird_SNS extends Vineyard.Bulb {
     return this.ground.db.query_single("SELECT * FROM `push_targets` WHERE device_id = ?", [device_id])
       .then((row) => {
         if (row) {
-          return row.user == user.id
-            ? when.resolve()
-            : pipeline([
+          var update_records = ()=> pipeline([
+            ()=> console.log('updating endpoint'),
             ()=> this.delete_endpoint(row.endpoint, platform),
             ()=> this.ground.db.query("DELETE FROM `push_targets` WHERE device_id = ?", [device_id]),
             ()=> this.create_endpoint(user, platform, device_id)
           ])
+
+          if (row.user == user.id) {
+            return this.get_user(platform, row.endpoint)
+              .then((record)=> {
+                console.log('push-record', record)
+                //console.log('enabled', record.Attributes)
+                return record.Attributes.Enabled == 'false'
+                  ? update_records()
+                  : when.resolve()
+              })
+          }
+          else {
+            return update_records()
+          }
         }
         else {
           return this.create_endpoint(user, platform, device_id)
@@ -152,7 +183,7 @@ class Songbird_SNS extends Vineyard.Bulb {
   }
 
   send(user, message, data, badge):Promise {
-    console.log('pushing message to user ' + user.id + '.', message)
+    console.log('2pushing message to user ' + user.id + '.', message)
     return this.ground.db.query('SELECT * FROM push_targets WHERE user = ?', [user.id])
       .then((rows)=> {
         if (rows.length == 0)

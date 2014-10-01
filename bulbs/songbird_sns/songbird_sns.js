@@ -104,8 +104,8 @@ var Songbird_SNS = (function (_super) {
         });
         platform.addUser(device_id, data, function (error, endpoint) {
             if (error) {
-                def.reject(error);
                 console.log(error);
+                def.reject(error);
                 return;
             }
 
@@ -113,6 +113,22 @@ var Songbird_SNS = (function (_super) {
             return _this.ground.db.query(sql, [user.id, device_id, endpoint, platform.platform]).then(function () {
                 def.resolve();
             });
+        });
+
+        return def.promise;
+    };
+
+    Songbird_SNS.prototype.get_user = function (platform, endpoint) {
+        console.log('get_user');
+        var def = when.defer();
+        platform.getUser(endpoint, function (error, response) {
+            console.log('get_user', error, response);
+            if (error) {
+                console.log(error);
+                def.reject(error);
+            } else {
+                def.resolve(response);
+            }
         });
 
         return def.promise;
@@ -127,17 +143,32 @@ var Songbird_SNS = (function (_super) {
 
         return this.ground.db.query_single("SELECT * FROM `push_targets` WHERE device_id = ?", [device_id]).then(function (row) {
             if (row) {
-                return row.user == user.id ? when.resolve() : pipeline([
-                    function () {
-                        return _this.delete_endpoint(row.endpoint, platform);
-                    },
-                    function () {
-                        return _this.ground.db.query("DELETE FROM `push_targets` WHERE device_id = ?", [device_id]);
-                    },
-                    function () {
-                        return _this.create_endpoint(user, platform, device_id);
-                    }
-                ]);
+                var update_records = function () {
+                    return pipeline([
+                        function () {
+                            return console.log('updating endpoint');
+                        },
+                        function () {
+                            return _this.delete_endpoint(row.endpoint, platform);
+                        },
+                        function () {
+                            return _this.ground.db.query("DELETE FROM `push_targets` WHERE device_id = ?", [device_id]);
+                        },
+                        function () {
+                            return _this.create_endpoint(user, platform, device_id);
+                        }
+                    ]);
+                };
+
+                if (row.user == user.id) {
+                    return _this.get_user(platform, row.endpoint).then(function (record) {
+                        console.log('push-record', record);
+
+                        return record.Attributes.Enabled == 'false' ? update_records() : when.resolve();
+                    });
+                } else {
+                    return update_records();
+                }
             } else {
                 return _this.create_endpoint(user, platform, device_id);
             }
@@ -146,7 +177,7 @@ var Songbird_SNS = (function (_super) {
 
     Songbird_SNS.prototype.send = function (user, message, data, badge) {
         var _this = this;
-        console.log('pushing message to user ' + user.id + '.', message);
+        console.log('2pushing message to user ' + user.id + '.', message);
         return this.ground.db.query('SELECT * FROM push_targets WHERE user = ?', [user.id]).then(function (rows) {
             if (rows.length == 0)
                 return when.resolve([]);
